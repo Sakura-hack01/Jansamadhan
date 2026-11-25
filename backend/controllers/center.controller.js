@@ -7,7 +7,8 @@ const DEFAULT_CENTERS = [
     type: 'central',
     departmentName: 'Ministry of Personnel, Public Grievances & Pensions',
     address: { street: 'Sansad Marg, Patel Chowk', landmark: 'Near Reserve Bank of India', city: 'New Delhi', state: 'Delhi', pincode: '110001' },
-    location: { type: 'Point', coordinates: [77.2139, 28.6229] },
+    lat: 28.6229,
+    lng: 77.2139,
     phone: '1800-11-0031',
     email: 'grievance@jansamadhan.gov.in',
     workingDays: 'Mon - Fri',
@@ -26,7 +27,8 @@ const DEFAULT_CENTERS = [
     type: 'appellate',
     departmentName: 'Cabinet Secretariat, Government of India',
     address: { street: '2nd Floor, Sardar Patel Bhawan, Parliament Street', landmark: 'Connaught Place South', city: 'New Delhi', state: 'Delhi', pincode: '110001' },
-    location: { type: 'Point', coordinates: [77.2148, 28.6238] },
+    lat: 28.6238,
+    lng: 77.2148,
     phone: '011-23743139',
     email: 'dpg-cabsec@gov.in',
     workingDays: 'Mon - Fri',
@@ -45,7 +47,8 @@ const DEFAULT_CENTERS = [
     type: 'district',
     departmentName: 'Revenue & District Administration, Govt. of NCT Delhi',
     address: { street: '14, Daryaganj, Netaji Subhash Marg', landmark: 'Near Delhi Gate', city: 'New Delhi', state: 'Delhi', pincode: '110002' },
-    location: { type: 'Point', coordinates: [77.2410, 28.6415] },
+    lat: 28.6415,
+    lng: 77.2410,
     phone: '011-23273555',
     email: 'dccentral@nic.in',
     workingDays: 'Mon - Sat',
@@ -64,7 +67,8 @@ const DEFAULT_CENTERS = [
     type: 'state',
     departmentName: 'General Administration Dept, Govt. of Maharashtra',
     address: { street: 'Madame Cama Road, Nariman Point', landmark: 'Opposite Vidhan Bhavan', city: 'Mumbai', state: 'Maharashtra', pincode: '400032' },
-    location: { type: 'Point', coordinates: [72.8258, 18.9284] },
+    lat: 18.9284,
+    lng: 72.8258,
     phone: '022-22025042',
     email: 'grievance.mh@gov.in',
     workingDays: 'Mon - Fri',
@@ -83,7 +87,8 @@ const DEFAULT_CENTERS = [
     type: 'district',
     departmentName: 'Collectorate of Mumbai City',
     address: { street: 'Old Custom House, Shahid Bhagat Singh Road, Fort', landmark: 'Near Horniman Circle', city: 'Mumbai', state: 'Maharashtra', pincode: '400001' },
-    location: { type: 'Point', coordinates: [72.8355, 18.9322] },
+    lat: 18.9322,
+    lng: 72.8355,
     phone: '022-22661231',
     email: 'collector.mumbai@maharashtra.gov.in',
     workingDays: 'Mon - Sat',
@@ -102,7 +107,8 @@ const DEFAULT_CENTERS = [
     type: 'state',
     departmentName: 'Department of Personnel & Administrative Reforms, Karnataka',
     address: { street: 'Dr. Ambedkar Veedhi, Sampangi Rama Nagar', landmark: 'Near Cubbon Park Gate', city: 'Bengaluru', state: 'Karnataka', pincode: '560001' },
-    location: { type: 'Point', coordinates: [77.5906, 12.9797] },
+    lat: 12.9797,
+    lng: 77.5906,
     phone: '080-22258555',
     email: 'janaspandana@karnataka.gov.in',
     workingDays: 'Mon - Sat',
@@ -121,7 +127,8 @@ const DEFAULT_CENTERS = [
     type: 'state',
     departmentName: 'Public Department, Govt. of Tamil Nadu',
     address: { street: 'Fort St. George, Rajaji Salai', landmark: 'Near Secretariat Complex', city: 'Chennai', state: 'Tamil Nadu', pincode: '600009' },
-    location: { type: 'Point', coordinates: [80.2872, 13.0797] },
+    lat: 13.0797,
+    lng: 80.2872,
     phone: '044-25671764',
     email: 'cmcell@tn.gov.in',
     workingDays: 'Mon - Fri',
@@ -140,7 +147,8 @@ const DEFAULT_CENTERS = [
     type: 'state',
     departmentName: 'Public Grievance Cell, Govt. of West Bengal',
     address: { street: '325, Sarat Chatterjee Road, Shibpur', landmark: 'Nabanna State Secretariat', city: 'Kolkata', state: 'West Bengal', pincode: '711102' },
-    location: { type: 'Point', coordinates: [88.3204, 22.5588] },
+    lat: 22.5588,
+    lng: 88.3204,
     phone: '033-22145555',
     email: 'grievance.wb@gov.in',
     workingDays: 'Mon - Fri',
@@ -159,7 +167,8 @@ const DEFAULT_CENTERS = [
     type: 'district',
     departmentName: 'Hyderabad District Collectorate',
     address: { street: 'Chirag Ali Lane, Abids, Nampally', landmark: 'Near Nampally Station Road', city: 'Hyderabad', state: 'Telangana', pincode: '500001' },
-    location: { type: 'Point', coordinates: [78.4728, 17.3913] },
+    lat: 17.3913,
+    lng: 78.4728,
     phone: '040-23202813',
     email: 'collector_hyd@telangana.gov.in',
     workingDays: 'Mon - Sat',
@@ -178,7 +187,8 @@ const DEFAULT_CENTERS = [
     type: 'state',
     departmentName: 'Department of Public Grievances, Govt. of UP',
     address: { street: 'Vidhan Sabha Marg, Hazratganj', landmark: 'Opposite Vidhan Bhawan', city: 'Lucknow', state: 'Uttar Pradesh', pincode: '226001' },
-    location: { type: 'Point', coordinates: [80.9462, 26.8424] },
+    lat: 26.8424,
+    lng: 80.9462,
     phone: '1076',
     email: 'jansunwai@up.gov.in',
     workingDays: 'Mon - Sat',
@@ -197,7 +207,8 @@ const DEFAULT_CENTERS = [
     type: 'district',
     departmentName: 'District Collectorate Pune',
     address: { street: 'Station Road, Bund Garden, Agarkar Nagar', landmark: 'Opposite Sassoon Hospital', city: 'Pune', state: 'Maharashtra', pincode: '411001' },
-    location: { type: 'Point', coordinates: [73.8736, 18.5262] },
+    lat: 18.5262,
+    lng: 73.8736,
     phone: '020-26123371',
     email: 'collector.pune@maharashtra.gov.in',
     workingDays: 'Mon - Sat',
@@ -216,7 +227,8 @@ const DEFAULT_CENTERS = [
     type: 'state',
     departmentName: 'Department of Administrative Reforms, Rajasthan',
     address: { street: 'Collectorate Circle, Bani Park', landmark: 'Mini Secretariat Campus', city: 'Jaipur', state: 'Rajasthan', pincode: '302016' },
-    location: { type: 'Point', coordinates: [75.7955, 26.9245] },
+    lat: 26.9245,
+    lng: 75.7955,
     phone: '181',
     email: 'sampark.raj@gov.in',
     workingDays: 'Mon - Fri',
@@ -235,7 +247,8 @@ const DEFAULT_CENTERS = [
     type: 'district',
     departmentName: 'Collector Office Ahmedabad',
     address: { street: 'Subhash Bridge Circle, Near RTO', landmark: 'Jilla Seva Sadan', city: 'Ahmedabad', state: 'Gujarat', pincode: '380027' },
-    location: { type: 'Point', coordinates: [72.5784, 23.0638] },
+    lat: 23.0638,
+    lng: 72.5784,
     phone: '079-27551681',
     email: 'collector-ahd@gujarat.gov.in',
     workingDays: 'Mon - Sat',
@@ -254,7 +267,8 @@ const DEFAULT_CENTERS = [
     type: 'district',
     departmentName: 'District Administration Bhopal',
     address: { street: 'A-Block, Old Secretariat, Sultania Road', landmark: 'Near Kohefiza', city: 'Bhopal', state: 'Madhya Pradesh', pincode: '462001' },
-    location: { type: 'Point', coordinates: [77.3928, 23.2611] },
+    lat: 23.2611,
+    lng: 77.3928,
     phone: '0755-2540355',
     email: 'dmbhopal@nic.in',
     workingDays: 'Mon - Fri',
@@ -273,7 +287,8 @@ const DEFAULT_CENTERS = [
     type: 'district',
     departmentName: 'Public Grievance Redressal Authority, Bihar',
     address: { street: 'Chajju Bagh, Gandhi Maidan West', landmark: 'Near Golghar', city: 'Patna', state: 'Bihar', pincode: '800001' },
-    location: { type: 'Point', coordinates: [85.1376, 25.6197] },
+    lat: 25.6197,
+    lng: 85.1376,
     phone: '0612-2219205',
     email: 'dm-patna.bih@nic.in',
     workingDays: 'Mon - Sat',
@@ -292,7 +307,8 @@ const DEFAULT_CENTERS = [
     type: 'csc',
     departmentName: 'Department of Information Technology, Chandigarh UT',
     address: { street: 'Sector 17-D, Jan Marg', landmark: 'Near Neelam Theatre Plaza', city: 'Chandigarh', state: 'Chandigarh', pincode: '160017' },
-    location: { type: 'Point', coordinates: [76.7834, 30.7415] },
+    lat: 30.7415,
+    lng: 76.7834,
     phone: '0172-2700072',
     email: 'sampark-chd@nic.in',
     workingDays: 'Mon - Sat',
@@ -311,7 +327,8 @@ const DEFAULT_CENTERS = [
     type: 'csc',
     departmentName: 'CSC e-Governance Services India Ltd (MeitY)',
     address: { street: 'Block B, Inner Circle, Connaught Place', landmark: 'Near Rajiv Chowk Gate 5', city: 'New Delhi', state: 'Delhi', pincode: '110001' },
-    location: { type: 'Point', coordinates: [77.2195, 28.6328] },
+    lat: 28.6328,
+    lng: 77.2195,
     phone: '14599',
     email: 'helpdesk@csc.gov.in',
     workingDays: 'Mon - Sat',
@@ -330,7 +347,7 @@ let seededOnce = false;
 
 const ensureSeeded = async () => {
   if (seededOnce) return;
-  const count = await GrievanceCenter.countDocuments();
+  const count = await GrievanceCenter.count();
   if (count === 0) {
     await GrievanceCenter.insertMany(DEFAULT_CENTERS);
   }
@@ -348,40 +365,23 @@ const haversineKm = (lat1, lon1, lat2, lon2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// @desc    Get all physical grievance centers (optionally sorted by distance from lat/lng)
+// @desc    Get all physical grievance centers
 // @route   GET /api/centers
 // @access  Public
 exports.getCenters = async (req, res, next) => {
   try {
     await ensureSeeded();
     const { lat, lng, type, search, wheelchair } = req.query;
-
-    const query = { isActive: true };
-    if (type && type !== 'all') query.type = type;
-    if (wheelchair === 'true') query['facilities.wheelchairAccessible'] = true;
-    if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { departmentName: { $regex: search, $options: 'i' } },
-        { 'address.city': { $regex: search, $options: 'i' } },
-        { 'address.state': { $regex: search, $options: 'i' } },
-        { 'address.pincode': { $regex: search, $options: 'i' } },
-      ];
-    }
-
-    const centers = await GrievanceCenter.find(query).lean();
+    const centers = await GrievanceCenter.findFiltered({ type, search, wheelchair });
 
     const userLat = parseFloat(lat);
     const userLng = parseFloat(lng);
     const hasCoords = !Number.isNaN(userLat) && !Number.isNaN(userLng);
 
     const enriched = centers.map((c) => {
-      const [cLng, cLat] = c.location?.coordinates || [77.2139, 28.6229];
-      const distanceKm = hasCoords ? haversineKm(userLat, userLng, cLat, cLng) : null;
+      const distanceKm = hasCoords ? haversineKm(userLat, userLng, c.lat, c.lng) : null;
       return {
         ...c,
-        lat: cLat,
-        lng: cLng,
         distanceKm: distanceKm !== null ? Number(distanceKm.toFixed(2)) : null,
         distanceMeters: distanceKm !== null ? Math.round(distanceKm * 1000) : null,
       };
@@ -402,7 +402,7 @@ exports.getCenters = async (req, res, next) => {
 // @access  Private (Admin)
 exports.seedCenters = async (req, res, next) => {
   try {
-    await GrievanceCenter.deleteMany({});
+    await GrievanceCenter.deleteAll();
     const created = await GrievanceCenter.insertMany(DEFAULT_CENTERS);
     seededOnce = true;
     res.json({ success: true, count: created.length, data: created });

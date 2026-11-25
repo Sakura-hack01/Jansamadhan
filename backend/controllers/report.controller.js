@@ -1,7 +1,4 @@
-const Complaint = require('../models/Complaint');
-const User = require('../models/User');
-const Delivery = require('../models/Delivery');
-const Department = require('../models/Department');
+const { query } = require('../config/database');
 
 // @desc    Get summary report
 // @route   GET /api/reports/summary
@@ -9,64 +6,68 @@ const Department = require('../models/Department');
 exports.getSummaryReport = async (req, res, next) => {
   try {
     const { startDate, endDate, department } = req.query;
-    let dateFilter = {};
-    if (startDate || endDate) {
-      dateFilter.createdAt = {};
-      if (startDate) dateFilter.createdAt.$gte = new Date(startDate);
-      if (endDate) dateFilter.createdAt.$lte = new Date(endDate);
-    }
 
-    let complaintFilter = { ...dateFilter };
-    if (department) complaintFilter.department = department;
+    const cConds = [];
+    const cParams = [];
+    let i = 1;
 
-    const totalComplaints = await Complaint.countDocuments(complaintFilter);
-    const totalUsers = await User.countDocuments({ role: 'user' });
-    const totalOfficers = await User.countDocuments({ role: 'officer' });
-    const totalDeliveries = await Delivery.countDocuments(dateFilter);
+    if (startDate) { cConds.push(`c.created_at >= $${i++}`); cParams.push(new Date(startDate)); }
+    if (endDate) { cConds.push(`c.created_at <= $${i++}`); cParams.push(new Date(endDate)); }
+    if (department) { cConds.push(`c.department_id = $${i++}`); cParams.push(department); }
 
-    const complaintsByStatus = await Complaint.aggregate([
-      { $match: complaintFilter },
-      { $group: { _id: '$status', count: { $sum: 1 } } }
-    ]);
+    const cWhere = cConds.length ? `WHERE ${cConds.join(' AND ')}` : '';
 
-    const complaintsByDept = await Complaint.aggregate([
-      { $match: complaintFilter },
-      { $group: { _id: '$department', count: { $sum: 1 } } },
-      { $lookup: { from: 'departments', localField: '_id', foreignField: '_id', as: 'dept' } },
-      { $unwind: '$dept' },
-      { $project: { name: '$dept.name', count: 1 } },
-      { $sort: { count: -1 } }
-    ]);
+    const dConds = [];
+    const dParams = [];
+    let di = 1;
+    if (startDate) { dConds.push(`created_at >= $${di++}`); dParams.push(new Date(startDate)); }
+    if (endDate) { dConds.push(`created_at <= $${di++}`); dParams.push(new Date(endDate)); }
+    const dWhere = dConds.length ? `WHERE ${dConds.join(' AND ')}` : '';
 
-    const avgResolution = await Complaint.aggregate([
-      { $match: { ...complaintFilter, status: 'resolved', resolvedAt: { $exists: true } } },
-      {
-        $group: {
-          _id: null,
-          avgDays: {
-            $avg: {
-              $divide: [{ $subtract: ['$resolvedAt', '$createdAt'] }, 86400000]
-            }
-          }
-        }
-      }
-    ]);
+    const totalComplaints = (await query(`SELECT COUNT(*)::int AS cnt FROM complaints c ${cWhere}`, cParams)).rows[0].cnt;
+    const totalUsers = (await query(`SELECT COUNT(*)::int AS cnt FROM users WHERE role = 'user'`)).rows[0].cnt;
+    const totalOfficers = (await query(`SELECT COUNT(*)::int AS cnt FROM users WHERE role = 'officer'`)).rows[0].cnt;
+    const totalDeliveries = (await query(`SELECT COUNT(*)::int AS cnt FROM deliveries ${dWhere}`, dParams)).rows[0].cnt;
 
-    const complaintTrend = await Complaint.aggregate([
-      { $match: { ...complaintFilter, createdAt: { $gte: new Date(new Date() - 30 * 86400000) } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]);
+    const complaintsByStatus = (
+      await query(`SELECT c.status AS "_id", COUNT(*)::int AS count FROM complaints c ${cWhere} GROUP BY c.status`, cParams)
+    ).rows;
 
-    const priorityBreakdown = await Complaint.aggregate([
-      { $match: complaintFilter },
-      { $group: { _id: '$priority', count: { $sum: 1 } } }
-    ]);
+    const complaintsByDept = (
+      await query(
+        `SELECT d.name, COUNT(*)::int AS count
+         FROM complaints c
+         JOIN departments d ON c.department_id = d.id
+         ${cWhere}
+         GROUP BY d.id, d.name
+         ORDER BY count DESC`,
+        cParams
+      )
+    ).rows;
+
+    const avgRes = (
+      await query(
+        `SELECT AVG(EXTRACT(EPOCH FROM (c.resolved_at - c.created_at)) / 86400.0) AS avg_days
+         FROM complaints c
+         ${cWhere ? `${cWhere} AND` : 'WHERE'} c.status = 'resolved' AND c.resolved_at IS NOT NULL`,
+        cParams
+      )
+    ).rows[0];
+
+    const complaintTrend = (
+      await query(
+        `SELECT to_char(date_trunc('day', c.created_at), 'YYYY-MM-DD') AS "_id", COUNT(*)::int AS count
+         FROM complaints c
+         ${cWhere ? `${cWhere} AND` : 'WHERE'} c.created_at >= NOW() - INTERVAL '30 days'
+         GROUP BY date_trunc('day', c.created_at)
+         ORDER BY "_id" ASC`,
+        cParams
+      )
+    ).rows;
+
+    const priorityBreakdown = (
+      await query(`SELECT c.priority AS "_id", COUNT(*)::int AS count FROM complaints c ${cWhere} GROUP BY c.priority`, cParams)
+    ).rows;
 
     res.json({
       success: true,
@@ -74,10 +75,10 @@ exports.getSummaryReport = async (req, res, next) => {
         overview: { totalComplaints, totalUsers, totalOfficers, totalDeliveries },
         complaintsByStatus,
         complaintsByDept,
-        avgResolutionDays: avgResolution[0]?.avgDays?.toFixed(1) || 0,
+        avgResolutionDays: avgRes?.avg_days ? Number(avgRes.avg_days).toFixed(1) : 0,
         complaintTrend,
-        priorityBreakdown
-      }
+        priorityBreakdown,
+      },
     });
   } catch (error) {
     next(error);
@@ -89,35 +90,19 @@ exports.getSummaryReport = async (req, res, next) => {
 // @access  Private (Admin)
 exports.getDepartmentReport = async (req, res, next) => {
   try {
-    const report = await Department.aggregate([
-      {
-        $lookup: {
-          from: 'complaints',
-          localField: '_id',
-          foreignField: 'department',
-          as: 'complaints'
-        }
-      },
-      {
-        $project: {
-          name: 1,
-          code: 1,
-          total: { $size: '$complaints' },
-          pending: {
-            $size: { $filter: { input: '$complaints', as: 'c', cond: { $eq: ['$$c.status', 'pending'] } } }
-          },
-          resolved: {
-            $size: { $filter: { input: '$complaints', as: 'c', cond: { $eq: ['$$c.status', 'resolved'] } } }
-          },
-          inProgress: {
-            $size: { $filter: { input: '$complaints', as: 'c', cond: { $eq: ['$$c.status', 'in_progress'] } } }
-          }
-        }
-      },
-      { $sort: { total: -1 } }
-    ]);
+    const { rows } = await query(`
+      SELECT d.id AS "_id", d.name, d.code,
+        COUNT(c.id)::int AS total,
+        COUNT(*) FILTER (WHERE c.status = 'pending')::int AS pending,
+        COUNT(*) FILTER (WHERE c.status = 'resolved')::int AS resolved,
+        COUNT(*) FILTER (WHERE c.status = 'in_progress')::int AS "inProgress"
+      FROM departments d
+      LEFT JOIN complaints c ON c.department_id = d.id
+      GROUP BY d.id, d.name, d.code
+      ORDER BY total DESC
+    `);
 
-    res.json({ success: true, data: report });
+    res.json({ success: true, data: rows });
   } catch (error) {
     next(error);
   }
@@ -128,34 +113,19 @@ exports.getDepartmentReport = async (req, res, next) => {
 // @access  Private (Admin)
 exports.getOfficerReport = async (req, res, next) => {
   try {
-    const report = await User.aggregate([
-      { $match: { role: 'officer' } },
-      {
-        $lookup: {
-          from: 'complaints',
-          localField: '_id',
-          foreignField: 'assignedOfficer',
-          as: 'assigned'
-        }
-      },
-      {
-        $project: {
-          name: 1,
-          email: 1,
-          department: 1,
-          totalAssigned: { $size: '$assigned' },
-          resolved: {
-            $size: { $filter: { input: '$assigned', as: 'c', cond: { $eq: ['$$c.status', 'resolved'] } } }
-          },
-          pending: {
-            $size: { $filter: { input: '$assigned', as: 'c', cond: { $in: ['$$c.status', ['pending', 'assigned', 'in_progress']] } } }
-          }
-        }
-      },
-      { $sort: { resolved: -1 } }
-    ]);
+    const { rows } = await query(`
+      SELECT u.id AS "_id", u.name, u.email, u.department_id AS department,
+        COUNT(c.id)::int AS "totalAssigned",
+        COUNT(*) FILTER (WHERE c.status = 'resolved')::int AS resolved,
+        COUNT(*) FILTER (WHERE c.status IN ('pending', 'assigned', 'in_progress'))::int AS pending
+      FROM users u
+      LEFT JOIN complaints c ON c.assigned_officer_id = u.id
+      WHERE u.role = 'officer'
+      GROUP BY u.id, u.name, u.email, u.department_id
+      ORDER BY resolved DESC
+    `);
 
-    res.json({ success: true, data: report });
+    res.json({ success: true, data: rows });
   } catch (error) {
     next(error);
   }

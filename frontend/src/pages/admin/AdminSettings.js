@@ -101,7 +101,7 @@ export default function AdminSettings() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
               { label: 'Version', value: '7.0.0' },
-              { label: 'Stack', value: 'MERN (MongoDB, Express, React, Node.js)' },
+              { label: 'Stack', value: 'PostgreSQL (Neon/Supabase), Express, React, Node.js' },
               { label: 'Auth Providers', value: 'Email ID + OTP + Google' },
               { label: 'Password Policy', value: '2-Month Mandatory Rotation' },
               { label: 'Country', value: '🇮🇳 India' },

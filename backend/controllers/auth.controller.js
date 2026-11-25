@@ -8,10 +8,8 @@ const Notification = require('../models/Notification');
 const { clearLoginAttempts } = require('../middleware/security.middleware');
 
 const getGoogleClient = () => new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
 const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '');
 
-// Helper: Fetch JSON over HTTPS using built-in Node https module
 const fetchJson = (url, headers = {}) =>
   new Promise((resolve, reject) => {
     https
@@ -33,16 +31,9 @@ const fetchJson = (url, headers = {}) =>
       .on('error', reject);
   });
 
-// Serialize user cleanly with password expiration metadata
 const serializeUser = (user) => {
   const userObj = user.toObject ? user.toObject() : { ...user };
   delete userObj.password;
-  delete userObj.loginOtp;
-  delete userObj.loginOtpExpire;
-  delete userObj.emailVerificationToken;
-  delete userObj.emailVerificationExpire;
-  delete userObj.resetPasswordToken;
-  delete userObj.resetPasswordExpire;
 
   if (typeof user.getPasswordExpiryDate === 'function') {
     const expiryDate = user.getPasswordExpiryDate();
@@ -53,7 +44,6 @@ const serializeUser = (user) => {
   return userObj;
 };
 
-// Helper to send token response
 const sendTokenResponse = (user, statusCode, res) => {
   const token = user.generateJWT();
   const refreshToken = user.generateRefreshToken();
@@ -75,14 +65,17 @@ exports.register = async (req, res, next) => {
     const email = normalizeEmail(req.body.email);
     const cleanPhone = phone && phone.trim() ? phone.trim() : undefined;
 
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findByEmail(email);
     if (existingUser) {
       if (!existingUser.isVerified) {
         existingUser.name = name || existingUser.name;
-        if (password) existingUser.password = password;
         if (cleanPhone) existingUser.phone = cleanPhone;
         const otp = existingUser.generateLoginOtp();
-        await existingUser.save();
+        if (password) {
+          await User.setNewPassword(existingUser, password);
+        } else {
+          await User.save(existingUser);
+        }
 
         const { subject, html } = emailTemplates.otpRegistration(existingUser, otp);
         const emailSent = await sendEmail({ to: email, subject, html });
@@ -99,7 +92,7 @@ exports.register = async (req, res, next) => {
       return res.status(400).json({ message: 'Email already registered. Please sign in.' });
     }
 
-    const user = await User.create({
+    let user = await User.create({
       name,
       email,
       password,
@@ -111,17 +104,17 @@ exports.register = async (req, res, next) => {
     });
 
     const otp = user.generateLoginOtp();
-    await user.save({ validateBeforeSave: false });
+    user = await User.save(user);
 
     const { subject, html } = emailTemplates.otpRegistration(user, otp);
     const emailSent = await sendEmail({ to: email, subject, html });
     if (!emailSent) {
-      await User.findByIdAndDelete(user._id);
+      await User.deleteById(user.id);
       return res.status(500).json({ message: 'Verification email could not be sent. Please try again later.' });
     }
 
     await Notification.create({
-      user: user._id,
+      user: user.id,
       title: 'Welcome to JanSamadhan!',
       message: 'Your account has been created. Please complete OTP verification.',
       type: 'system',
@@ -149,7 +142,7 @@ exports.login = async (req, res, next) => {
       return res.status(400).json({ message: 'Please provide email and password.' });
     }
 
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findByEmail(email);
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
@@ -177,7 +170,6 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Enforce 2-month password expiration for registered password users
     if (user.isPasswordExpired()) {
       return res.status(403).json({
         code: 'PASSWORD_EXPIRED',
@@ -190,9 +182,9 @@ exports.login = async (req, res, next) => {
     clearLoginAttempts(req);
     user.lastLogin = new Date();
     user.loginCount = (user.loginCount || 0) + 1;
-    await user.save({ validateBeforeSave: false });
+    const saved = await User.save(user);
 
-    sendTokenResponse(user, 200, res);
+    sendTokenResponse(saved, 200, res);
   } catch (error) {
     next(error);
   }
@@ -200,7 +192,7 @@ exports.login = async (req, res, next) => {
 
 // @desc    Update expired password (after 2-month expiration)
 // @route   POST /api/auth/update-expired-password
-// @access  Public (requires short-lived passwordUpdateToken)
+// @access  Public
 exports.updateExpiredPassword = async (req, res, next) => {
   try {
     const { token, newPassword } = req.body;
@@ -219,7 +211,7 @@ exports.updateExpiredPassword = async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid password renewal token.' });
     }
 
-    const user = await User.findById(decoded.id).select('+password');
+    const user = await User.findById(decoded.id);
     if (!user) {
       return res.status(404).json({ message: 'Account not found.' });
     }
@@ -231,12 +223,11 @@ exports.updateExpiredPassword = async (req, res, next) => {
       }
     }
 
-    user.password = newPassword;
     user.lastLogin = new Date();
     user.loginCount = (user.loginCount || 0) + 1;
-    await user.save();
+    const updated = await User.setNewPassword(user, newPassword);
 
-    sendTokenResponse(user, 200, res);
+    sendTokenResponse(updated, 200, res);
   } catch (error) {
     next(error);
   }
@@ -250,12 +241,12 @@ exports.sendLoginOtp = async (req, res, next) => {
     const email = normalizeEmail(req.body.email);
     if (!email) return res.status(400).json({ message: 'Email is required.' });
 
-    const user = await User.findOne({ email });
+    const user = await User.findByEmail(email);
     if (!user) return res.status(404).json({ message: 'No account found with this email.' });
     if (!user.isActive) return res.status(403).json({ message: 'Your account has been deactivated.' });
 
     const otp = user.generateLoginOtp();
-    await user.save({ validateBeforeSave: false });
+    await User.save(user);
 
     const template = user.isVerified
       ? emailTemplates.otpLogin(user, otp)
@@ -263,9 +254,9 @@ exports.sendLoginOtp = async (req, res, next) => {
 
     const emailSent = await sendEmail({ to: user.email, subject: template.subject, html: template.html });
     if (!emailSent) {
-      user.loginOtp = undefined;
-      user.loginOtpExpire = undefined;
-      await user.save({ validateBeforeSave: false });
+      user.loginOtp = null;
+      user.loginOtpExpire = null;
+      await User.save(user);
       return res.status(500).json({ message: 'Email could not be sent. Please check email settings.' });
     }
 
@@ -285,23 +276,17 @@ exports.verifyLoginOtp = async (req, res, next) => {
     if (!email || !otp) return res.status(400).json({ message: 'Email and OTP are required.' });
 
     const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
-
-    const user = await User.findOne({
-      email,
-      loginOtp: hashedOtp,
-      loginOtpExpire: { $gt: Date.now() },
-    });
+    const user = await User.findByOtp(email, hashedOtp);
 
     if (!user) return res.status(400).json({ message: 'Invalid or expired OTP.' });
     if (!user.isActive) return res.status(403).json({ message: 'Your account has been deactivated.' });
 
-    user.loginOtp = undefined;
-    user.loginOtpExpire = undefined;
+    user.loginOtp = null;
+    user.loginOtpExpire = null;
     if (!user.isVerified) user.isVerified = true;
 
-    // If user registered with password and that password has already expired after 2 months, enforce renewal
     if (user.isPasswordExpired()) {
-      await user.save({ validateBeforeSave: false });
+      await User.save(user);
       return res.status(403).json({
         code: 'PASSWORD_EXPIRED',
         message: 'Your password has expired after 2 months. Please create a new password to continue.',
@@ -312,18 +297,18 @@ exports.verifyLoginOtp = async (req, res, next) => {
 
     user.lastLogin = new Date();
     user.loginCount = (user.loginCount || 0) + 1;
-    await user.save({ validateBeforeSave: false });
+    const saved = await User.save(user);
 
-    sendTokenResponse(user, 200, res);
+    sendTokenResponse(saved, 200, res);
   } catch (error) {
     next(error);
   }
 };
 
-// @desc    Google OAuth login (supports ID token credential or OAuth2 access_token)
+// @desc    Google OAuth login
 // @route   POST /api/auth/google
 // @access  Public
-exports.googleAuth = async (req, res, next) => {
+exports.googleAuth = async (req, res) => {
   try {
     const { credential, access_token: accessToken } = req.body;
 
@@ -354,7 +339,6 @@ exports.googleAuth = async (req, res, next) => {
       name = payload.name;
       picture = payload.picture;
     } else {
-      // Verify OAuth2 access token belongs to our GOOGLE_CLIENT_ID and fetch user profile
       const tokenInfo = await fetchJson(
         `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`
       );
@@ -374,7 +358,7 @@ exports.googleAuth = async (req, res, next) => {
       return res.status(400).json({ message: 'Google account did not return an email address.' });
     }
 
-    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+    let user = await User.findByGoogleOrEmail(googleId, email);
 
     if (!user) {
       user = await User.create({
@@ -400,9 +384,9 @@ exports.googleAuth = async (req, res, next) => {
 
     user.lastLogin = new Date();
     user.loginCount = (user.loginCount || 0) + 1;
-    await user.save({ validateBeforeSave: false });
+    const saved = await User.save(user);
 
-    sendTokenResponse(user, 200, res);
+    sendTokenResponse(saved, 200, res);
   } catch (error) {
     console.error('Google Auth Error:', error.message);
     return res.status(401).json({ message: 'Google authentication failed. Please try again.' });
@@ -413,7 +397,7 @@ exports.googleAuth = async (req, res, next) => {
 // @route   GET /api/auth/me
 // @access  Private
 exports.getMe = async (req, res) => {
-  const user = await User.findById(req.user.id).populate('department', 'name code');
+  const user = await User.findById(req.user.id);
   res.json({ success: true, user: serializeUser(user) });
 };
 
@@ -430,20 +414,16 @@ exports.logout = async (req, res) => {
 exports.verifyEmail = async (req, res, next) => {
   try {
     const hashedToken = crypto.createHash('sha256').update(req.params.token).digest('hex');
-
-    const user = await User.findOne({
-      emailVerificationToken: hashedToken,
-      emailVerificationExpire: { $gt: Date.now() },
-    });
+    const user = await User.findByVerificationToken(hashedToken);
 
     if (!user) {
       return res.status(400).json({ message: 'Invalid or expired verification token.' });
     }
 
     user.isVerified = true;
-    user.emailVerificationToken = undefined;
-    user.emailVerificationExpire = undefined;
-    await user.save({ validateBeforeSave: false });
+    user.emailVerificationToken = null;
+    user.emailVerificationExpire = null;
+    await User.save(user);
 
     res.json({ success: true, message: 'Email verified successfully.' });
   } catch (error) {
@@ -457,20 +437,20 @@ exports.verifyEmail = async (req, res, next) => {
 exports.forgotPassword = async (req, res, next) => {
   try {
     const email = normalizeEmail(req.body.email);
-    const user = await User.findOne({ email });
+    const user = await User.findByEmail(email);
     if (!user) {
       return res.status(404).json({ message: 'No account found with that email.' });
     }
 
     const resetToken = user.generatePasswordResetToken();
-    await user.save({ validateBeforeSave: false });
+    await User.save(user);
 
     const { subject, html } = emailTemplates.resetPassword(user, resetToken);
     const emailSent = await sendEmail({ to: user.email, subject, html });
     if (!emailSent) {
-      user.resetPasswordToken = undefined;
-      user.resetPasswordExpire = undefined;
-      await user.save({ validateBeforeSave: false });
+      user.resetPasswordToken = null;
+      user.resetPasswordExpire = null;
+      await User.save(user);
       return res.status(500).json({ message: 'Password reset email could not be sent. Please try again later.' });
     }
 
@@ -486,21 +466,16 @@ exports.forgotPassword = async (req, res, next) => {
 exports.resetPassword = async (req, res, next) => {
   try {
     const hashedToken = crypto.createHash('sha256').update(req.params.token).digest('hex');
-
-    const user = await User.findOne({
-      resetPasswordToken: hashedToken,
-      resetPasswordExpire: { $gt: Date.now() },
-    });
+    const user = await User.findByResetToken(hashedToken);
 
     if (!user) {
       return res.status(400).json({ message: 'Invalid or expired reset token.' });
     }
 
-    user.password = req.body.password;
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpire = null;
     if (!user.isVerified) user.isVerified = true;
-    await user.save();
+    await User.setNewPassword(user, req.body.password);
 
     res.json({ success: true, message: 'Password reset successful. Please sign in.' });
   } catch (error) {
@@ -514,7 +489,7 @@ exports.resetPassword = async (req, res, next) => {
 exports.changePassword = async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body;
-    const user = await User.findById(req.user.id).select('+password');
+    const user = await User.findById(req.user.id);
 
     if (!user.password) {
       return res.status(400).json({ message: 'No local password is set for this account.' });
@@ -530,13 +505,12 @@ exports.changePassword = async (req, res, next) => {
       return res.status(400).json({ message: 'New password must be different from your current password.' });
     }
 
-    user.password = newPassword;
-    await user.save();
+    const updated = await User.setNewPassword(user, newPassword);
 
     res.json({
       success: true,
       message: 'Password changed successfully. Valid for the next 2 months.',
-      user: serializeUser(user),
+      user: serializeUser(updated),
     });
   } catch (error) {
     next(error);

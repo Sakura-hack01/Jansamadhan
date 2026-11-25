@@ -1,14 +1,11 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const RedisStore = require('rate-limit-redis').default || require('rate-limit-redis');
-const redisClient = require('./config/redis');
-const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss-clean');
 const security = require('./middleware/security.middleware');
+const { connectDB, getPool, query } = require('./config/database');
 require('dotenv').config();
 
 const app = express();
@@ -27,24 +24,13 @@ app.use(helmet({
 // ===== APPLY ALL 11 SECURITY LAYERS =====
 security.applyAll(app);
 
-// ===== ADDITIONAL SECURITY: Mongo Sanitize + XSS Clean =====
-app.use(mongoSanitize({ replaceWith: '_' }));
+// ===== ADDITIONAL SECURITY: XSS Clean =====
 app.use(xss());
 
 // ===== LOGGING =====
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// ===== RATE LIMITING (Redis-Synced for 1 Lakh+ users) =====
-const getRedisStore = () => {
-  // Use memory store unless REDIS_URI is explicitly configured for production
-  if (!process.env.REDIS_URI || (process.env.NODE_ENV !== 'production' && !process.env.REDIS_URI.includes('rediss'))) {
-    return undefined;
-  }
-  return new RedisStore({
-    sendCommand: (...args) => redisClient.call(...args),
-  });
-};
-
+// ===== RATE LIMITING (In-memory store; parameterized SQL queries prevent injection) =====
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 200,                  // 200 requests per window per IP
@@ -55,7 +41,6 @@ const apiLimiter = rateLimit({
     code: 'RATE_LIMIT_EXCEEDED',
     retryAfter: 900
   },
-  store: getRedisStore(),
   skip: (req) => req.path === '/api/health', // Don't rate limit health checks
 });
 app.use('/api/', apiLimiter);
@@ -70,7 +55,6 @@ const authLimiter = rateLimit({
     message: 'Too many authentication attempts. Try again after 15 minutes.',
     code: 'AUTH_RATE_LIMIT'
   },
-  store: getRedisStore(),
   skip: (req) => req.path === '/me' || req.path === '/logout' || req.path === '/refresh-token',
 });
 
@@ -82,7 +66,6 @@ const grievanceLimiter = rateLimit({
     message: 'Grievance filing limit reached. Maximum 5 grievances per hour.',
     code: 'GRIEVANCE_RATE_LIMIT'
   },
-  store: getRedisStore()
 });
 
 // ===== CORS (Strict origin control) =====
@@ -148,7 +131,7 @@ app.get('/api/health', async (req, res) => {
       helmet: true,
       cors: true,
       rateLimiting: true,
-      noSQLInjectionProtection: true,
+      sqlInjectionProtection: true,
       xssProtection: true,
       hsts: true,
       csp: true,
@@ -160,9 +143,9 @@ app.get('/api/health', async (req, res) => {
     scale: 'Designed for 1,00,000+ concurrent users',
   };
   try {
-    const mongoState = mongoose.connection.readyState;
-    healthData.database = mongoState === 1 ? 'Connected' : 'Disconnected';
-  } catch { healthData.database = 'Unknown'; }
+    await query('SELECT 1');
+    healthData.database = 'Connected (PostgreSQL)';
+  } catch { healthData.database = 'Disconnected'; }
   res.json(healthData);
 });
 
@@ -182,7 +165,7 @@ app.use((err, req, res, next) => {
   if (process.env.NODE_ENV === 'development') console.error(err.stack);
 
   // CORS error
-  if (err.message === 'Not allowed by CORS') {
+  if (err.message === 'Not allowed by CORS' || err.message === 'Origin not allowed') {
     return res.status(403).json({ message: 'Origin not allowed', code: 'CORS_BLOCKED' });
   }
 
@@ -194,20 +177,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ===== MONGODB CONNECTION (with optimized connection pool) =====
-const mongoOptions = {
-  maxPoolSize: 50,          // Max connections (for high concurrency)
-  minPoolSize: 10,          // Keep minimum connections alive
-  socketTimeoutMS: 45000,   // Close sockets after 45 seconds of inactivity
-  serverSelectionTimeoutMS: 5000,
-  heartbeatFrequencyMS: 10000,
-  retryWrites: true,
-  w: 'majority',
-};
-
-mongoose.connect(process.env.MONGO_URI, mongoOptions)
+// ===== POSTGRESQL CONNECTION (Neon / Supabase / Local) =====
+connectDB()
   .then(() => {
-    console.log('✅ MongoDB Connected (Pool: 10-50 connections)');
+    console.log('✅ PostgreSQL Connected (Neon/Supabase compatible)');
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
       console.log(`\n🚀 JanSamadhan Server running on port ${PORT}`);
@@ -217,20 +190,22 @@ mongoose.connect(process.env.MONGO_URI, mongoOptions)
     });
   })
   .catch(err => {
-    console.error('❌ MongoDB connection error:', err.message);
+    console.error('❌ PostgreSQL connection error:', err.message);
     process.exit(1);
   });
 
 // ===== GRACEFUL SHUTDOWN =====
 process.on('SIGTERM', async () => {
   console.log('⏹️  SIGTERM received. Shutting down gracefully...');
-  await mongoose.connection.close();
+  const pool = getPool();
+  if (pool) await pool.end();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('⏹️  SIGINT received. Shutting down gracefully...');
-  await mongoose.connection.close();
+  const pool = getPool();
+  if (pool) await pool.end();
   process.exit(0);
 });
 

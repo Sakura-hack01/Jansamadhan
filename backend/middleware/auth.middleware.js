@@ -5,7 +5,7 @@ const User = require('../models/User');
 const protect = async (req, res, next) => {
   try {
     let token;
-    
+
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
     }
@@ -15,8 +15,8 @@ const protect = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    const user = await User.findById(decoded.id).select('-password');
+
+    const user = await User.findById(decoded.id);
     if (!user) {
       return res.status(401).json({ message: 'Token is invalid. User not found.' });
     }
@@ -25,9 +25,8 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ message: 'Your account has been deactivated. Contact admin.' });
     }
 
-    // Enforce 2-month password expiry on active sessions (allow password update, profile read, and logout)
     const allowedWhenExpired = ['/change-password', '/logout', '/me'];
-    const isExempt = allowedWhenExpired.some(p => req.originalUrl.includes(`/api/auth${p}`));
+    const isExempt = allowedWhenExpired.some((p) => req.originalUrl.includes(`/api/auth${p}`));
     if (!isExempt && user.isPasswordExpired()) {
       return res.status(403).json({
         message: 'Your password has expired after 2 months. Please update your password to continue.',
@@ -49,22 +48,18 @@ const protect = async (req, res, next) => {
   }
 };
 
-// Authorize roles
 const authorize = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({
-        message: `Access forbidden. Role '${req.user.role}' is not authorized to access this resource.`
+        message: `Access forbidden. Role '${req.user.role}' is not authorized to access this resource.`,
       });
     }
     next();
   };
 };
 
-// Admin only
 const adminOnly = authorize('admin');
-
-// Officer or Admin
 const officerOrAdmin = authorize('officer', 'admin');
 
 module.exports = { protect, authorize, adminOnly, officerOrAdmin };

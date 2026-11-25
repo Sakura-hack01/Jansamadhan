@@ -2,38 +2,41 @@ const Settings = require('../models/Settings');
 
 exports.getSettings = async (req, res, next) => {
   try {
-    const query = req.user.role === 'admin' ? {} : { isPublic: true };
-    const settings = await Settings.find(query);
+    const settings = await Settings.findAll({ publicOnly: req.user.role !== 'admin' });
     const settingsObj = settings.reduce((acc, s) => ({ ...acc, [s.key]: s.value }), {});
     res.json({ success: true, data: settingsObj });
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 };
 
 exports.updateSetting = async (req, res, next) => {
   try {
     const { key, value, description, category, isPublic } = req.body;
-    const setting = await Settings.findOneAndUpdate(
-      { key },
-      { key, value, description, category, isPublic, updatedBy: req.user.id },
-      { upsert: true, new: true }
-    );
+    const setting = await Settings.upsert({
+      key,
+      value,
+      description,
+      category,
+      isPublic,
+      updatedBy: req.user.id,
+    });
     res.json({ success: true, data: setting });
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 };
 
 exports.bulkUpdateSettings = async (req, res, next) => {
   try {
     const { settings } = req.body;
-    const ops = settings.map(s => ({
-      updateOne: {
-        filter: { key: s.key },
-        update: { ...s, updatedBy: req.user.id },
-        upsert: true
-      }
-    }));
-    await Settings.bulkWrite(ops);
+    for (const s of settings || []) {
+      await Settings.upsert({ ...s, updatedBy: req.user.id });
+    }
     res.json({ success: true, message: 'Settings updated.' });
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 };
 
 exports.initDefaultSettings = async (req, res, next) => {
@@ -50,9 +53,11 @@ exports.initDefaultSettings = async (req, res, next) => {
     ];
 
     for (const s of defaults) {
-      await Settings.findOneAndUpdate({ key: s.key }, s, { upsert: true });
+      await Settings.upsert({ ...s, updatedBy: req.user.id });
     }
 
     res.json({ success: true, message: 'Default settings initialized.' });
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 };
