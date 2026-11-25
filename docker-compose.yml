@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  # Redis service for caching and distributed rate limiting
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    restart: always
+    volumes:
+      - redis_data:/data
+
+  # Backend API Server with PM2 Clustering (Scales across cores)
+  api:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017/jansamadhan}
+      - REDIS_URI=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-supersecretkey}
+      - CLIENT_URL=http://localhost:3000
+    depends_on:
+      - redis
+      - mongo
+    restart: always
+
+  # MongoDB for the Main Data Store
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: always
+
+volumes:
+  redis_data:
+  mongo_data:
