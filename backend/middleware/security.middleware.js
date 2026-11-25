@@ -84,13 +84,18 @@ function securityHeaders(req, res, next) {
 
 // ===== 3. ANTI-PHISHING — Block suspicious requests =====
 function antiPhishing(req, res, next) {
+  const configuredOrigins = (process.env.CLIENT_URL || '')
+    .split(',')
+    .map(u => u.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+
   const allowedOrigins = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
-    process.env.CLIENT_URL,
+    ...configuredOrigins,
     'https://jansamadhan.gov.in',
     'https://www.jansamadhan.gov.in'
-  ].filter(Boolean);
+  ];
 
   const origin = req.headers.origin;
   const isDevLocal = process.env.NODE_ENV !== 'production' && (!origin || origin.includes('localhost') || origin.includes('127.0.0.1') || origin.startsWith('http://192.168.'));
@@ -267,6 +272,7 @@ function ipProtection(req, res, next) {
 
 // ===== 9. USER AGENT VALIDATOR — Block bots and scanners =====
 function botProtection(req, res, next) {
+  if (req.path === '/' || req.path === '/api/health') return next();
   const ua = (req.get('user-agent') || '').toLowerCase();
   const blockedBots = [
     'sqlmap', 'nikto', 'nmap', 'masscan', 'dirbuster', 'gobuster',

@@ -68,28 +68,37 @@ const grievanceLimiter = rateLimit({
   },
 });
 
-// ===== CORS (Strict origin control) =====
+// ===== CORS (Strict origin control for browser requests) =====
+const configuredOrigins = (process.env.CLIENT_URL || '')
+  .split(',')
+  .map((u) => u.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
 const allowedOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
-  process.env.CLIENT_URL,
+  ...configuredOrigins,
   'https://jansamadhan.gov.in',
   'https://www.jansamadhan.gov.in',
-].filter(Boolean);
+];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // In dev, allow Postman (no origin) and local network IPs naturally
+    // Allow non-browser / direct navigation / Render health checks (no Origin header)
+    if (!origin) return callback(null, true);
+
+    const normalizedOrigin = origin.replace(/\/+$/, '');
+
+    // In dev, allow local network IPs naturally
     if (process.env.NODE_ENV !== 'production') {
-      if (!origin || origin.includes('localhost') || origin.includes('127.0.0.1') || origin.startsWith('http://192.168.')) {
+      if (normalizedOrigin.includes('localhost') || normalizedOrigin.includes('127.0.0.1') || normalizedOrigin.startsWith('http://192.168.')) {
         return callback(null, true);
       }
     }
-    
-    // Strict match for production
-    if (!origin) return callback(new Error('Origin not allowed'));
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    
+
+    // Strict match for production cross-origin browser requests
+    if (allowedOrigins.includes(normalizedOrigin)) return callback(null, true);
+
     console.warn(`⚠️ CORS blocked origin: ${origin}`);
     return callback(new Error('Origin not allowed'));
   },
@@ -115,7 +124,15 @@ app.use('/api/departments', require('./routes/department.routes'));
 app.use('/api/notifications', require('./routes/notification.routes'));
 app.use('/api/centers', require('./routes/center.routes'));
 
-// ===== HEALTH CHECK (with details) =====
+// ===== ROOT & HEALTH CHECK =====
+app.get('/', (req, res) => {
+  res.json({
+    status: 'OK',
+    service: 'JanSamadhan API',
+    health: '/api/health',
+  });
+});
+
 app.get('/api/health', async (req, res) => {
   const healthData = {
     status: 'OK',
